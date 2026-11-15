@@ -106,6 +106,30 @@ test("detect: WorkBuddy 完全没装时仍是未安装", (t) => {
 	assert.equal(detect().workbuddy.homeExists, false);
 });
 
+test("detect: WorkBuddy AI 国际版安装目录（WorkBuddyAI.exe）被正确识别", (t) => {
+	const home = sandbox(t);
+	const install = join(home, "AppData", "Local", "Programs", "WorkBuddyAI");
+	mkdirSync(join(install, "resources"), { recursive: true });
+	writeFileSync(join(install, "WorkBuddyAI.exe"), "", "utf8");
+
+	const wbAi = detect()["workbuddy-ai"];
+	assert.equal(wbAi.found, true);
+	assert.equal(wbAi.homeExists, true);
+	assert.equal(detect().workbuddy.found, false, "国际版不应触发国内版命中");
+});
+
+test("detect: WorkBuddy AI 国际版靠 ~/.workbuddy-ai 认出来，并把配置根指向它", (t) => {
+	const home = sandbox(t);
+	const cfg = join(home, ".workbuddy-ai");
+	mkdirSync(cfg, { recursive: true });
+	writeFileSync(join(cfg, "settings.json"), "{}\n", "utf8");
+
+	const wbAi = detect()["workbuddy-ai"];
+	assert.equal(wbAi.found, true);
+	assert.equal(wbAi.home, cfg);
+	assert.equal(detect().workbuddy.found, false, "国际版配置根不应触发国内版命中");
+});
+
 test("detect: 桌面端装在 F 盘（不在任何默认目录）也能靠盘符扫到", (t) => {
 	const home = sandbox(t);
 	const root = dirname(home);
@@ -136,4 +160,30 @@ test("detect: PI-Desktop 只看自己的数据根，不把 pi CLI 当成 PI-Desk
 	mkdirSync(join(home, ".pi-desktop", "plugins"), { recursive: true });
 	assert.equal(detect()["pi-desktop"].found, true);
 	assert.equal(detect()["pi-desktop"].home, join(home, ".pi-desktop"));
+});
+
+test("detect: CLI 卸了只剩配置目录时 residueOnly=true（不能再算装上）", (t) => {
+	const home = sandbox(t);
+	mkdirSync(join(home, ".grok"), { recursive: true });
+	writeFileSync(join(home, ".grok", "config.toml"), "", "utf8");
+
+	const grok = detect().grok;
+	assert.equal(grok.found, true, "配置目录还在，found 仍是 true");
+	assert.equal(grok.residueOnly, true, "没有命令也没有安装目录，只剩残留");
+});
+
+test("detect: 命令在就不是残留", (t) => {
+	const home = sandbox(t);
+	const bin = join(home, ".opencode", "bin", process.platform === "win32" ? "opencode.exe" : "opencode");
+	mkdirSync(join(home, ".opencode", "bin"), { recursive: true });
+	writeFileSync(bin, "", "utf8");
+
+	assert.equal(detect().opencode.residueOnly, false);
+});
+
+test("detect: 什么都没装的家既不是装上也不是残留", (t) => {
+	sandbox(t);
+	const crush = detect().crush;
+	assert.equal(crush.found, false);
+	assert.equal(crush.residueOnly, false);
 });
